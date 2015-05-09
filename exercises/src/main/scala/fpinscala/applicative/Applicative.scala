@@ -150,10 +150,10 @@ object Traverse {
 // but aren't in the `exercises` subproject, so we include
 // them here
 object StateUtil {
-
-  def get[S]: State[S, S] =
-    State(s => (s, s))
-
-  def set[S](s: S): State[S, Unit] =
-    State(_ => ((), s))
+//  We implement these methods in state package.
+//  def get[S]: State[S, S] =
+//    State(s => (s, s))
+//
+//  def set[S](s: S): State[S, Unit] =
+//    State(_ => ((), s))
 }
