@@ -39,6 +39,8 @@ import annotation.tailrec
 final class Actor[A](strategy: Strategy)(handler: A => Unit, onError: Throwable => Unit = throw(_)) {
   self =>
 
+  // tailだけど1つのNodeに対するAtomicReference？？？
+  // => あああ、NodeはAtomicReference[Node]継承してた...
   private val tail = new AtomicReference(new Node[A]())
   private val suspended = new AtomicInteger(1)
   private val head = new AtomicReference(tail.get)
@@ -46,6 +48,10 @@ final class Actor[A](strategy: Strategy)(handler: A => Unit, onError: Throwable 
   /** Alias for `apply` */
   def !(a: A) {
     val n = new Node(a)
+    // headに値をsetする???メッセージボックスの後ろに新しい値を追加するとかになってる？？？？？
+    // - 元のheadの値を取得して.lazySet(n)
+    // - 元のheadにはnを入れる
+    // すまん、分からん (AtomicReference分からん)
     head.getAndSet(n).lazySet(n)
     trySchedule()
   }
@@ -59,18 +65,26 @@ final class Actor[A](strategy: Strategy)(handler: A => Unit, onError: Throwable 
     new Actor[B](strategy)((b: B) => (this ! f(b)), onError)
 
   private def trySchedule() {
+    // suspended == 1なら 0にセットしつつ、schedule を実行
+    // suspended == 0なら何もしない
     if (suspended.compareAndSet(1, 0)) schedule()
   }
 
   private def schedule() {
+    // strategyにactを渡す
+    // 名前渡しのため、別スレッド上で評価されるとかもstrategyの実装によっては起こりえる
     strategy(act())
   }
 
   private def act() {
     val t = tail.get
+    // handle処理(メッセージ受け取って何かするとか)を実行
+    // tailのNodeを初めに渡す
     val n = batchHandle(t, 1024)
     if (n ne t) {
       n.a = null.asInstanceOf[A]
+      // batchHandleし終わった後だから、全てのmailboxのを処理し終わった的な
+      // だからn.a = null(末尾)のものをtailにセットする
       tail.lazySet(n)
       schedule()
     } else {
@@ -82,17 +96,22 @@ final class Actor[A](strategy: Strategy)(handler: A => Unit, onError: Throwable 
   @tailrec
   private def batchHandle(t: Node[A], i: Int): Node[A] = {
     val n = t.get
+    // nullになるのは、次のreferenceが無い <=> 最後尾のNode(=AtomicReference[Node])ってこった
     if (n ne null) {
+      // 値を持ってるNode
       try {
         handler(n.a)
       } catch {
         case ex: Throwable => onError(ex)
       }
+      // 特にnは何も変えないでそのまま渡したり返したりする？
+      // あああ、n=t.getだから、自分が持ってるNodeのReferenceを次に渡してるんだ
       if (i > 0) batchHandle(n, i - 1) else n
-    } else t
+    } else t // nullを持つNodeなら、そのままNode返す
   }
 }
 
+// NodeもAtomicReferenceでNode持ってる
 private class Node[A](var a: A = null.asInstanceOf[A]) extends AtomicReference[Node[A]]
 
 object Actor {
