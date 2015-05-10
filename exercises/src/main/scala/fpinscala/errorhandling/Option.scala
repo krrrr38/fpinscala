@@ -28,9 +28,16 @@ sealed trait Option[+A] {
     case Some(get) if f(get) => this
     case _ => None
   }
+
+  def isDefined: Boolean
+  def isEmpty: Boolean = !isDefined
 }
-case class Some[+A](get: A) extends Option[A]
-case object None extends Option[Nothing]
+case class Some[+A](get: A) extends Option[A] {
+  override def isDefined: Boolean = true
+}
+case object None extends Option[Nothing] {
+  override def isDefined: Boolean = false
+}
 
 object Option {
   def apply[A](a: A): Option[A] = if (a != null) Some(a) else None
