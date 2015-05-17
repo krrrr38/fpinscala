@@ -21,6 +21,9 @@ object RNG {
 
   val int: Rand[Int] = _.nextInt
 
+  def boolean(rng: RNG): (Boolean, RNG) =
+    rng.nextInt match { case (i,rng2) => (i%2==0,rng2) }
+
   def unit[A](a: A): Rand[A] =
     rng => (a, rng)
 

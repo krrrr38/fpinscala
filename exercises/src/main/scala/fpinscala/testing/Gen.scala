@@ -82,6 +82,16 @@ object Prop {
       prop.run(max,n,rng)
   }
 
+  def run(p: Prop,
+          maxSize: Int = 100,
+          testCases: Int = 100,
+          rng: RNG = RNG.Simple(System.currentTimeMillis())): Unit =
+    p.run(maxSize, testCases, rng) match {
+      case Falsified(msg, n) => println(s"! Falsified after $n passed tests:\n $msg")
+      case Passed => println(s"+ OK, passed $testCases tests.")
+      case Proved => println(s"+ OK, proved property.")
+    }
+
   val ES: ExecutorService = Executors.newCachedThreadPool()
   val p1 = forAll(Gen.unit(Par.unit(1))) { i =>
     Par.map(i)(_ + 1)(ES).get() == Par.unit(2)(ES).get
@@ -92,7 +102,7 @@ object Prop {
     else Falsified("()", 0)
   }
 
-  val p2 = checkPar {
+  lazy val p2 = checkPar {
     equal(
       Par.map(Par.unit(1))(_ + 1),
       Par.unit(2)
@@ -102,11 +112,11 @@ object Prop {
   def equal[A](p: Par[A], p2: Par[A]): Par[Boolean] =
     Par.map2(p, p2)(_ == _)
 
-  val p3 = check {
+  lazy val p3 = check {
     equal(Par.map(Par.unit(1))(_ + 1), Par.unit(2))(ES).get
   }
 
-  val S = weighted(
+  lazy val S = weighted(
     choose(1, 4).map(Executors.newFixedThreadPool) -> .75,
     unit(Executors.newCachedThreadPool()) -> .25
   )
@@ -117,10 +127,10 @@ object Prop {
   def checkPar(p: Par[Boolean]): Prop =
     forAllPar(Gen.unit(()))(_ => p)
 
-  val pint = Gen.choose(0, 10) map Par.unit
-  val p4 = forAllPar(pint)(n => equal(Par.map(n)(identity), n))
+  lazy val pint = Gen.choose(0, 10) map Par.unit
+  lazy val p4 = forAllPar(pint)(n => equal(Par.map(n)(identity), n))
 
-  val p5 = forAllPar(pint)(n => equal(Par.unit(n)(ES).get(), n))
+  lazy val p5 = forAllPar(pint)(n => equal(Par.unit(n)(ES).get(), n))
 
   object ** {
     def unapply[A, B](p: (A, B)) = Some(p)
@@ -144,11 +154,18 @@ object Gen {
 
   def int: Gen[Int] = Gen(State(RNG.int))
 
+  def char: Gen[Char] = int.map(_.toChar)
+
   def double: Gen[Double] = Gen(State(RNG.double))
 
   def boolean: Gen[Boolean] = int.map(_%2 == 0)
 
-  def string: SGen[String] = listOf(int).map(_.map(_.toChar).mkString)
+  def string = listOf[Char](char).map(_.mkString)
+
+  def stringN(n: Int): Gen[String] =
+    listOfN(n, choose(0,127)).map(_.map(_.toChar).mkString)
+
+  def stringN(size: Gen[Int]): Gen[String] = size.flatMap(i => string.forSize(i))
 
   def genStringIntFn(g: Gen[Int]): Gen[String => Int] =
     g map (i => s => i)
@@ -212,16 +229,6 @@ object Gen {
   def listOf[A](a: Gen[A]): SGen[List[A]] = SGen(size => listOfN(size, a))
 
   def listOf1[A](a: Gen[A]): SGen[List[A]] = SGen(size => listOfN(size max 1, a))
-
-  def run(p: Prop,
-           maxSize: Int = 100,
-           testCases: Int = 100,
-           rng: RNG = RNG.Simple(System.currentTimeMillis())): Unit =
-    p.run(maxSize, testCases, rng) match {
-      case Falsified(msg, n) => println(s"! Falsified after $n passed tests:\n $msg")
-      case Passed => println(s"+ OK, passed $testCases tests.")
-      case Proved => println(s"+ OK, proved property.")
-    }
 
   implicit class OptionGen[A](gen: Gen[A]) {
     def toOption: Gen[Option[A]] =
