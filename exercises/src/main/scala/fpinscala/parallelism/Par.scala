@@ -11,6 +11,9 @@ object Par {
 
   def lazyUnit[A](a: => A): Par[A] = fork(unit(a))
 
+  def flatMap[A,B](a: Par[A])(f: A => Par[B]): Par[B] =
+    (es: ExecutorService) => run(es)(f(run(es)(a).get))
+
   private case class UnitFuture[A](get: A) extends Future[A] {
     def isDone = true 
     def get(timeout: Long, units: TimeUnit) = get 
